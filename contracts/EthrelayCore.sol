@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.4 <0.9.0;
+// pragma solidity >=0.8.4 <0.9.0;
+pragma solidity =0.7.6;
 
 import "./MerklePatriciaProof.sol";
 
@@ -681,7 +682,18 @@ contract EthrelayCore {
             elementIdx++;
         }
 
-        bytes memory truncatedRlpHeader = bytes.concat(rlpHeader[:startCut], rlpHeader[endCut:]);
+        // bytes memory truncatedRlpHeader = bytes.concat(rlpHeader[:startCut], rlpHeader[endCut:]);
+        bytes memory truncatedRlpHeader = new bytes(startCut + rlpHeader.length - endCut);
+        // truncatedRlpHeader.push(rlpHeader[:startCut]);
+        // truncatedRlpHeader.push(rlpHeader[endCut:]);
+        
+        for (uint i = 0; i < truncatedRlpHeader.length; i++) {
+            if (i < startCut) {
+                truncatedRlpHeader[i] = rlpHeader[:startCut][i];
+            } else {
+                truncatedRlpHeader[i] = rlpHeader[endCut:][i - startCut];
+            }
+        }
         uint16 rlpHeaderWithoutNonceLength = uint16(
             rlpHeader.length        // Length of original RLP header
             - 3                     // RLP List prefix bytes (0xf9 + two bytes for payload length)
