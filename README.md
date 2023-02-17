@@ -86,3 +86,13 @@ truffle test UndoTransfer.test.js
 ```
 truffle test UndoTransfer.test.js
 ```
+### Test progress
+- In the 1st case, Alice has 10 token A and 0 token B. She is going to use UniswapV3 to swap token B.
+- Alice deposits value (mis)using ERC20's `transfer` function instead of `approve-transferFrom` to transfer 5 tokens to the pool contract.
+- Alice is aware of her mistake. She calls `undo_transfer` to recall her tokens.
+- Alice finally has 10 token A again.
+- In the 2nd case, Alice tries to repeatly send a undo_transfer() function
+- She failed and her token balance remains 10 token A.
+
+Here is the screenshot of the test result.
+![](patchedV3_screenshot.png?raw=true)
