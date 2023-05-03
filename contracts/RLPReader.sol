@@ -5,7 +5,8 @@
 *         Changes: Markus Levonyak
 * Please reach out with any questions or concerns
 */
-pragma solidity >=0.5.0 <0.9.0;
+// pragma solidity >=0.5.0 <0.9.0;
+pragma solidity =0.7.6;
 
 library RLPReader {
     uint8 constant STRING_SHORT_START = 0x80;

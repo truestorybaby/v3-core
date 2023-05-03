@@ -26,11 +26,13 @@ import './interfaces/IERC20Minimal.sol';
 import './interfaces/callback/IUniswapV3MintCallback.sol';
 import './interfaces/callback/IUniswapV3SwapCallback.sol';
 import './interfaces/callback/IUniswapV3FlashCallback.sol';
+
 abstract contract VerifyTransactionInterface {
     // function verify(uint24 blockNumber, bytes32 txHash, uint8 noOfConfirmations) payable public virtual returns (bool);
     function getTxMetaData(bytes32 txHash) public view virtual returns (address, address, bytes memory);
     function getRequiredVerificationFee() public view virtual returns (uint);
 }
+
 contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
     using LowGasSafeMath for uint256;
     using LowGasSafeMath for int256;
@@ -56,7 +58,7 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
 
     /// @inheritdoc IUniswapV3PoolImmutables
     uint128 public immutable override maxLiquidityPerTick;
-    mapping(bytes32 => bool) usedTxs;
+
     struct Slot0 {
         // the current price
         uint160 sqrtPriceX96;
@@ -101,7 +103,9 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
     mapping(bytes32 => Position.Info) public override positions;
     /// @inheritdoc IUniswapV3PoolState
     Oracle.Observation[65535] public override observations;
-
+    
+    mapping(bytes32 => bool) usedTxs;
+    VerifyTransactionInterface verifier;
     /// @dev Mutually exclusive reentrancy protection into the pool to/from a method. This method also prevents entrance
     /// to a function before the pool is initialized. The reentrancy guard is required throughout the contract because
     /// we use balance checks to determine the payment status of interactions such as mint, swap and flash.
@@ -117,70 +121,15 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
         require(msg.sender == IUniswapV3Factory(factory).owner());
         _;
     }
-    
-    VerifyTransactionInterface verifier;
-    address payable contractAddress;
-    constructor(address payable _verifier) {
+
+    constructor() {
         int24 _tickSpacing;
         (factory, token0, token1, fee, _tickSpacing) = IUniswapV3PoolDeployer(msg.sender).parameters();
         tickSpacing = _tickSpacing;
+
         maxLiquidityPerTick = Tick.tickSpacingToMaxLiquidityPerTick(_tickSpacing);
-        //////////////////////
-        contractAddress = _verifier;
-        verifier = VerifyTransactionInterface(_verifier);
     }
-    event IdentifyTransaction(address from, address to, bytes input);
-    event LogRes(bytes res, bytes expect);
-    function undo_transfer(uint amountX, bytes32 txHash, uint24 blockNumber) public payable {
-        require(identifyTransaction(amountX, txHash, blockNumber), "Transaction identification failed");
-        // identifyTransaction(amountX, txHash, blockNumber);
-        TransferHelper.safeTransfer(token0, msg.sender, amountX);
-        usedTxs[txHash] = true;
-    }
-    function identifyTransaction(uint amountX, bytes32 txHash, uint24 blockNumber) internal returns (bool) {
-        if (usedTxs[txHash]) {
-            return false;
-        }
 
-        address from;
-        address to;
-        bytes memory input;
-
-        (from, to, input) = verifier.getTxMetaData(txHash);
-        emit IdentifyTransaction(from, to, input);
-        bytes memory ref = abi.encodeWithSignature("transfer(address,uint256)", address(this), amountX);
-        emit IdentifyTransaction(msg.sender, address(tokenX), ref);
-        if(from != msg.sender || to != address(tokenX) || !compareBytes(ref, input)) {
-            return false;
-        }
-
-        uint verifyFee = verifier.getRequiredVerificationFee();
-        require(msg.value >= verifyFee, "Not enough verification fee");
-        // return true;
-        (bool success , bytes memory data) = contractAddress.call{value: verifyFee}(
-            abi.encodeWithSignature("verify(uint24,bytes32,uint8)", blockNumber, txHash, 6)
-        );
-        emit LogRes(data, abi.encodePacked(uint(1)));
-        if (success) {
-            return compareBytes(data, abi.encodePacked(uint(1)));
-        } else {
-            return false;
-        }
-    }
-    function compareBytes(bytes memory b1, bytes memory b2) internal pure returns (bool) {
-        if (b1.length != b2.length) {
-            return false;
-        }
-
-        for (uint i = 0; i < b1.length; i++) {
-            if (b1[i] != b2[i]) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-    
     /// @dev Common checks for valid tick inputs.
     function checkTicks(int24 tickLower, int24 tickUpper) private pure {
         require(tickLower < tickUpper, 'TLU');
@@ -552,59 +501,59 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
     }
 
     /// @inheritdoc IUniswapV3PoolActions
-    function collect(
-        address recipient,
-        int24 tickLower,
-        int24 tickUpper,
-        uint128 amount0Requested,
-        uint128 amount1Requested
-    ) external override lock returns (uint128 amount0, uint128 amount1) {
-        // we don't need to checkTicks here, because invalid positions will never have non-zero tokensOwed{0,1}
-        Position.Info storage position = positions.get(msg.sender, tickLower, tickUpper);
+    // function collect(
+    //     address recipient,
+    //     int24 tickLower,
+    //     int24 tickUpper,
+    //     uint128 amount0Requested,
+    //     uint128 amount1Requested
+    // ) external override lock returns (uint128 amount0, uint128 amount1) {
+    //     // we don't need to checkTicks here, because invalid positions will never have non-zero tokensOwed{0,1}
+    //     Position.Info storage position = positions.get(msg.sender, tickLower, tickUpper);
 
-        amount0 = amount0Requested > position.tokensOwed0 ? position.tokensOwed0 : amount0Requested;
-        amount1 = amount1Requested > position.tokensOwed1 ? position.tokensOwed1 : amount1Requested;
+    //     amount0 = amount0Requested > position.tokensOwed0 ? position.tokensOwed0 : amount0Requested;
+    //     amount1 = amount1Requested > position.tokensOwed1 ? position.tokensOwed1 : amount1Requested;
 
-        if (amount0 > 0) {
-            position.tokensOwed0 -= amount0;
-            TransferHelper.safeTransfer(token0, recipient, amount0);
-        }
-        if (amount1 > 0) {
-            position.tokensOwed1 -= amount1;
-            TransferHelper.safeTransfer(token1, recipient, amount1);
-        }
+    //     if (amount0 > 0) {
+    //         position.tokensOwed0 -= amount0;
+    //         TransferHelper.safeTransfer(token0, recipient, amount0);
+    //     }
+    //     if (amount1 > 0) {
+    //         position.tokensOwed1 -= amount1;
+    //         TransferHelper.safeTransfer(token1, recipient, amount1);
+    //     }
 
-        emit Collect(msg.sender, recipient, tickLower, tickUpper, amount0, amount1);
-    }
+    //     emit Collect(msg.sender, recipient, tickLower, tickUpper, amount0, amount1);
+    // }
 
     /// @inheritdoc IUniswapV3PoolActions
     /// @dev noDelegateCall is applied indirectly via _modifyPosition
-    function burn(
-        int24 tickLower,
-        int24 tickUpper,
-        uint128 amount
-    ) external override lock returns (uint256 amount0, uint256 amount1) {
-        (Position.Info storage position, int256 amount0Int, int256 amount1Int) = _modifyPosition(
-            ModifyPositionParams({
-                owner: msg.sender,
-                tickLower: tickLower,
-                tickUpper: tickUpper,
-                liquidityDelta: -int256(amount).toInt128()
-            })
-        );
+    // function burn(
+    //     int24 tickLower,
+    //     int24 tickUpper,
+    //     uint128 amount
+    // ) external override lock returns (uint256 amount0, uint256 amount1) {
+    //     (Position.Info storage position, int256 amount0Int, int256 amount1Int) = _modifyPosition(
+    //         ModifyPositionParams({
+    //             owner: msg.sender,
+    //             tickLower: tickLower,
+    //             tickUpper: tickUpper,
+    //             liquidityDelta: -int256(amount).toInt128()
+    //         })
+    //     );
 
-        amount0 = uint256(-amount0Int);
-        amount1 = uint256(-amount1Int);
+    //     amount0 = uint256(-amount0Int);
+    //     amount1 = uint256(-amount1Int);
 
-        if (amount0 > 0 || amount1 > 0) {
-            (position.tokensOwed0, position.tokensOwed1) = (
-                position.tokensOwed0 + uint128(amount0),
-                position.tokensOwed1 + uint128(amount1)
-            );
-        }
+    //     if (amount0 > 0 || amount1 > 0) {
+    //         (position.tokensOwed0, position.tokensOwed1) = (
+    //             position.tokensOwed0 + uint128(amount0),
+    //             position.tokensOwed1 + uint128(amount1)
+    //         );
+    //     }
 
-        emit Burn(msg.sender, tickLower, tickUpper, amount, amount0, amount1);
-    }
+    //     emit Burn(msg.sender, tickLower, tickUpper, amount, amount0, amount1);
+    // }
 
     struct SwapCache {
         // the protocol fee for the input token
@@ -665,7 +614,7 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
         bytes calldata data
     ) external override noDelegateCall returns (int256 amount0, int256 amount1) {
         require(amountSpecified != 0, 'AS');
-
+        
         Slot0 memory slot0Start = slot0;
 
         require(slot0Start.unlocked, 'LOK');
@@ -893,37 +842,92 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
         emit Flash(msg.sender, recipient, amount0, amount1, paid0, paid1);
     }
 
-    /// @inheritdoc IUniswapV3PoolOwnerActions
-    function setFeeProtocol(uint8 feeProtocol0, uint8 feeProtocol1) external override lock onlyFactoryOwner {
-        require(
-            (feeProtocol0 == 0 || (feeProtocol0 >= 4 && feeProtocol0 <= 10)) &&
-                (feeProtocol1 == 0 || (feeProtocol1 >= 4 && feeProtocol1 <= 10))
-        );
-        uint8 feeProtocolOld = slot0.feeProtocol;
-        slot0.feeProtocol = feeProtocol0 + (feeProtocol1 << 4);
-        emit SetFeeProtocol(feeProtocolOld % 16, feeProtocolOld >> 4, feeProtocol0, feeProtocol1);
+    // function setFeeProtocol(uint8 feeProtocol0, uint8 feeProtocol1) external override lock onlyFactoryOwner {
+    //     require(
+    //         (feeProtocol0 == 0 || (feeProtocol0 >= 4 && feeProtocol0 <= 10)) &&
+    //             (feeProtocol1 == 0 || (feeProtocol1 >= 4 && feeProtocol1 <= 10))
+    //     );
+    //     uint8 feeProtocolOld = slot0.feeProtocol;
+    //     slot0.feeProtocol = feeProtocol0 + (feeProtocol1 << 4);
+    //     emit SetFeeProtocol(feeProtocolOld % 16, feeProtocolOld >> 4, feeProtocol0, feeProtocol1);
+    // }
+
+    // function collectProtocol(
+    //     address recipient,
+    //     uint128 amount0Requested,
+    //     uint128 amount1Requested
+    // ) external override lock onlyFactoryOwner returns (uint128 amount0, uint128 amount1) {
+    //     amount0 = amount0Requested > protocolFees.token0 ? protocolFees.token0 : amount0Requested;
+    //     amount1 = amount1Requested > protocolFees.token1 ? protocolFees.token1 : amount1Requested;
+
+    //     if (amount0 > 0) {
+    //         if (amount0 == protocolFees.token0) amount0--; // ensure that the slot is not cleared, for gas savings
+    //         protocolFees.token0 -= amount0;
+    //         TransferHelper.safeTransfer(token0, recipient, amount0);
+    //     }
+    //     if (amount1 > 0) {
+    //         if (amount1 == protocolFees.token1) amount1--; // ensure that the slot is not cleared, for gas savings
+    //         protocolFees.token1 -= amount1;
+    //         TransferHelper.safeTransfer(token1, recipient, amount1);
+    //     }
+
+    //     emit CollectProtocol(msg.sender, recipient, amount0, amount1);
+    // }
+
+    function set_verifier(address _verifier) external onlyFactoryOwner {
+        verifier = VerifyTransactionInterface(_verifier);
     }
 
-    /// @inheritdoc IUniswapV3PoolOwnerActions
-    function collectProtocol(
-        address recipient,
-        uint128 amount0Requested,
-        uint128 amount1Requested
-    ) external override lock onlyFactoryOwner returns (uint128 amount0, uint128 amount1) {
-        amount0 = amount0Requested > protocolFees.token0 ? protocolFees.token0 : amount0Requested;
-        amount1 = amount1Requested > protocolFees.token1 ? protocolFees.token1 : amount1Requested;
-
-        if (amount0 > 0) {
-            if (amount0 == protocolFees.token0) amount0--; // ensure that the slot is not cleared, for gas savings
-            protocolFees.token0 -= amount0;
-            TransferHelper.safeTransfer(token0, recipient, amount0);
-        }
-        if (amount1 > 0) {
-            if (amount1 == protocolFees.token1) amount1--; // ensure that the slot is not cleared, for gas savings
-            protocolFees.token1 -= amount1;
-            TransferHelper.safeTransfer(token1, recipient, amount1);
+    // event IdentifyTransaction(address from, address to, bytes input);
+    // event LogRes(bytes res, bytes expect);
+    function undo_transfer(uint amountX, bytes32 txHash, uint24 blockNumber) public payable {
+        address token = identifyTransaction(amountX, txHash, blockNumber);
+        require(token != address(0));
+        TransferHelper.safeTransfer(token, msg.sender, amountX);
+        usedTxs[txHash] = true;
+    }
+    function identifyTransaction(uint amountX, bytes32 txHash, uint24 blockNumber) internal returns (address) {
+        if (usedTxs[txHash]) {
+            return address(0);
         }
 
-        emit CollectProtocol(msg.sender, recipient, amount0, amount1);
+        address from;
+        address to;
+        bytes memory input;
+
+        (from, to, input) = verifier.getTxMetaData(txHash);
+        // emit IdentifyTransaction(from, to, input);
+        bytes memory ref = abi.encodeWithSignature("transfer(address,uint256)", address(this), amountX);
+        // emit IdentifyTransaction(msg.sender, address(to), ref);
+        if(from != msg.sender || (to != address(token0) && to != address(token1)) || !compareBytes(ref, input)) {
+            return address(0);
+        }
+
+        uint verifyFee = verifier.getRequiredVerificationFee();
+        require(msg.value >= verifyFee);
+        (bool success , bytes memory data) = (address(verifier)).call{value: verifyFee}(
+            abi.encodeWithSignature("verify(uint24,bytes32,uint8)", blockNumber, txHash, 6)
+        );
+        // emit LogRes(data, abi.encodePacked(uint(1)));
+        if (success) {
+            if (compareBytes(data, abi.encodePacked(uint(1)))) {
+                return to;
+            }
+        }
+        
+        return address(0);
+    }
+    function compareBytes(bytes memory b1, bytes memory b2) internal pure returns (bool) {
+        if (b1.length != b2.length) {
+            return false;
+        }
+
+        for (uint i = 0; i < b1.length; i++) {
+            if (b1[i] != b2[i]) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

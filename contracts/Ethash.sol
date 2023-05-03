@@ -1,4 +1,5 @@
-pragma solidity >=0.7.0 <0.9.0;
+// pragma solidity >=0.7.0 <0.9.0;
+pragma solidity =0.7.6;
 
 /// @dev These contracts are used to verify Proof of Work within a smart contract.
 ///      The algorithms have been extracted from the implementation of smart pool (https://github.com/smartpool)
