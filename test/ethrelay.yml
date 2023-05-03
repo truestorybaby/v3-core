@@ -1,0 +1,12 @@
+chains:
+  destinations:
+    local:
+      ethashaddress: 0x031C9445BDc67DC90734cf2d06B77E8b0784C884
+      port: 7545
+      type: http
+      url: localhost
+  sources:
+    mainnet:
+      type: http
+      url: 127.0.0.1:7545
+privatekey: 0x3a9e31fe34bc221d57d045fb70b172e03193cd1c75a374050fd2b0dd627c4666

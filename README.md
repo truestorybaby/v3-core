@@ -1,4 +1,4 @@
-# Uniswap V3
+# Secure Redesign of Uniswap V3 Pool that Prevents Token Lost
 
 [![Lint](https://github.com/Uniswap/uniswap-v3-core/actions/workflows/lint.yml/badge.svg)](https://github.com/Uniswap/uniswap-v3-core/actions/workflows/lint.yml)
 [![Tests](https://github.com/Uniswap/uniswap-v3-core/actions/workflows/tests.yml/badge.svg)](https://github.com/Uniswap/uniswap-v3-core/actions/workflows/tests.yml)
@@ -64,3 +64,35 @@ The primary license for Uniswap V3 Core is the Business Source License 1.1 (`BUS
 
 - `contracts/libraries/FullMath.sol` is licensed under `MIT` (as indicated in its SPDX header), see [`contracts/libraries/LICENSE_MIT`](contracts/libraries/LICENSE_MIT)
 - All files in `contracts/test` remain unlicensed (as indicated in their SPDX headers).
+
+## Test for withdraw lost tokens
+- Install `node.js`,`truffle`,`ganache`,`go`
+- Install dependency
+
+`npm install`
+
+- Run ganache
+
+`ganache -p 7545`
+
+- Run test program in the test folder
+```
+cd test
+truffle test UndoTransfer.test.js
+```
+- At the beginning, the test will fail because the block is not enough to verify.
+- Run the last command several times until we have enough blocks to verify. `advanced to block > 30000`
+- Run to test if `undo_transfer()` function works. The result will be passed now.
+```
+truffle test UndoTransfer.test.js
+```
+### Test progress
+- In the 1st case, Alice has 10 token A and 0 token B. She is going to use UniswapV3 to swap token B.
+- Alice deposits value (mis)using ERC20's `transfer` function instead of `approve-transferFrom` to transfer 5 tokens to the pool contract.
+- Alice is aware of her mistake. She calls `undo_transfer` to recall her tokens.
+- Alice finally has 10 token A again.
+- In the 2nd case, Alice tries to repeatly send a undo_transfer() function
+- She failed and her token balance remains 10 token A.
+
+Here is the screenshot of the test result.
+![](patchedV3_screenshot.png?raw=true)

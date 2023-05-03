@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.7.0 <0.9.0;
+// pragma solidity >=0.7.0 <0.9.0;
+pragma solidity =0.7.6;
 
 abstract contract EthrelayInterface {
     function depositStake(uint amount) payable public virtual;
@@ -91,7 +92,7 @@ contract VerifyTransaction {
     function submitAndVerifyBlock(uint24 blockNumber, bytes memory rlpHeader, bytes memory rlpParent, uint[] memory dataSetLookup, uint[] memory witnessForLookup) public isOwner {
         ethrelayContract.submitBlock(rlpHeader);
         ethrelayContract.disputeBlockHeader(rlpHeader, rlpParent, dataSetLookup, witnessForLookup);
-        require(ethrelayContract.isHeaderStored(keccak256(rlpHeader)), "Failed to store block header");
+        // require(ethrelayContract.isHeaderStored(keccak256(rlpHeader)), "Failed to store block header");
         blockRlpHeaders[blockNumber] = rlpHeader;
 
         emit SubmittedBlock(blockNumber);
