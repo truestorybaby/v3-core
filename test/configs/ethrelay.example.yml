@@ -1,0 +1,11 @@
+chains:
+  sources:
+    mainnet:
+      type: wss
+      url: mainnet.infura.io/ws/v3/1e835672adba4b9b930a12a3ec58ebad
+  destinations:
+    local:
+      port: 7545
+      type: http
+      url: localhost
+privatekey: 0x0

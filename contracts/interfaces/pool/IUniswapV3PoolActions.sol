@@ -40,13 +40,13 @@ interface IUniswapV3PoolActions {
     /// @param amount1Requested How much token1 should be withdrawn from the fees owed
     /// @return amount0 The amount of fees collected in token0
     /// @return amount1 The amount of fees collected in token1
-    function collect(
-        address recipient,
-        int24 tickLower,
-        int24 tickUpper,
-        uint128 amount0Requested,
-        uint128 amount1Requested
-    ) external returns (uint128 amount0, uint128 amount1);
+    // function collect(
+    //     address recipient,
+    //     int24 tickLower,
+    //     int24 tickUpper,
+    //     uint128 amount0Requested,
+    //     uint128 amount1Requested
+    // ) external returns (uint128 amount0, uint128 amount1);
 
     /// @notice Burn liquidity from the sender and account tokens owed for the liquidity to the position
     /// @dev Can be used to trigger a recalculation of fees owed to a position by calling with an amount of 0
@@ -56,11 +56,11 @@ interface IUniswapV3PoolActions {
     /// @param amount How much liquidity to burn
     /// @return amount0 The amount of token0 sent to the recipient
     /// @return amount1 The amount of token1 sent to the recipient
-    function burn(
-        int24 tickLower,
-        int24 tickUpper,
-        uint128 amount
-    ) external returns (uint256 amount0, uint256 amount1);
+    // function burn(
+    //     int24 tickLower,
+    //     int24 tickUpper,
+    //     uint128 amount
+    // ) external returns (uint256 amount0, uint256 amount1);
 
     /// @notice Swap token0 for token1, or token1 for token0
     /// @dev The caller of this method receives a callback in the form of IUniswapV3SwapCallback#uniswapV3SwapCallback

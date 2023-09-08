@@ -6,7 +6,8 @@
  *
  * @dev Library for verifing merkle patricia proofs.
  */
-pragma solidity >=0.5.10 <0.9.0;
+// pragma solidity >=0.5.10 <0.9.0;
+pragma solidity =0.7.6;
 import "./RLPReader.sol";
 
 library MerklePatriciaProof {
